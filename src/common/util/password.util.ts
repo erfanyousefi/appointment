@@ -15,3 +15,6 @@ export function randomPassword(length: number) {
     hashed: hashSync(result, 12),
   };
 }
+export function hashPassword(data: string) {
+  return hashSync(data, 12);
+}

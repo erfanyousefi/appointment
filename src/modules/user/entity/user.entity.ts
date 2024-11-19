@@ -18,4 +18,6 @@ export class UserEntity {
   otp_code: string;
   @Column({nullable: true})
   otp_expires_in: Date;
+  @Column({nullable: true})
+  last_change_password: Date;
 }

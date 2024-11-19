@@ -10,12 +10,17 @@ import {InjectRepository} from "@nestjs/typeorm";
 import {compareSync} from "bcrypt";
 import {isMobilePhone} from "class-validator";
 import {randomInt} from "crypto";
-import {A_JWT_SECRET, R_JWT_SECRET} from "src/common/constant/jwt.const";
+import {
+  A_JWT_SECRET,
+  ForgetPassword_JWT_SECRET,
+  R_JWT_SECRET,
+} from "src/common/constant/jwt.const";
 import {mobileValidation} from "src/common/util/mobile.util";
-import {randomPassword} from "src/common/util/password.util";
+import {hashPassword, randomPassword} from "src/common/util/password.util";
 import {Repository} from "typeorm";
 import {UserEntity} from "../user/entity/user.entity";
 import {
+  ChangePasswordDto,
   CheckOtpDto,
   ForgetPasswordDto,
   LoginDto,
@@ -51,6 +56,29 @@ export class AuthService {
       message:
         "حساب کاربری شما با موفقیت ایجاد شده، در بخش ورود وارد حساب کاربری خود شوید",
       password,
+    };
+  }
+  async changePassword(changePasswordDto: ChangePasswordDto) {
+    const {confirmPassword, newPassword, token} = changePasswordDto;
+    const data = this.verifyPasswordToken(token);
+    const user = await this.userRepository.findOneBy({id: data.userId});
+    if (!user) throw new NotFoundException("اطلاعات ارسال شده صحیح نمیباشد");
+    if (user.last_change_password) {
+      const lastChanges = new Date(
+        user.last_change_password.getTime() + 1000 * 60 * 60
+      );
+      if (lastChanges > new Date())
+        throw new BadRequestException(
+          "شما  هر یک ساعت یکبا قادر به ویرایش رمز عبور خود هستید"
+        );
+    }
+    if (newPassword !== confirmPassword)
+      throw new BadRequestException("رمز عبور با تکرار آن برابر نیست");
+    user.password = hashPassword(newPassword);
+    user.last_change_password = new Date();
+    await this.userRepository.save(user);
+    return {
+      message: "ویرایش رمز عبور با موفقیت انجام شد",
     };
   }
   async login(loginDto: LoginDto) {
@@ -100,7 +128,21 @@ export class AuthService {
     if (userId) return this.tokenGenerator(+userId);
     throw new UnauthorizedException("مجددا وارد حساب کاربری خود شوید");
   }
-  async forgetPassword(forgetPasswordDto: ForgetPasswordDto) {}
+  async forgetPassword(forgetPasswordDto: ForgetPasswordDto) {
+    const {mobile} = forgetPasswordDto;
+    let user = await this.userRepository.findOneBy({mobile});
+    if (!user) user = await this.userRepository.findOneBy({username: mobile});
+    if (!user)
+      throw new UnauthorizedException(
+        "نام کاربری یا موبایل وارد شده اشتباه میباشد"
+      );
+    const link = this.forgetPasswordLinkGenerator(user);
+    //send - sms link
+    return {
+      message: "لینک بازگردانی رمز عبور برای شما اس ام اس شد",
+      link,
+    };
+  }
   async tokenGenerator(userId: number) {
     const accessToken = this.jwtService.sign(
       {userId},
@@ -115,6 +157,14 @@ export class AuthService {
       refreshToken,
     };
   }
+  forgetPasswordLinkGenerator(user: UserEntity) {
+    const token = this.jwtService.sign(
+      {userId: user.id, mobile: user.mobile},
+      {secret: ForgetPassword_JWT_SECRET, expiresIn: "1m"}
+    );
+    const link = `http://localhost:3000/auth/changeme?token=${token}`;
+    return link;
+  }
   verifyRefreshToken(refreshToken: string) {
     try {
       const verified = this.jwtService.verify(refreshToken, {
@@ -125,6 +175,22 @@ export class AuthService {
       throw new UnauthorizedException("وارد حساب کاربری خود شوید");
     } catch (err) {
       throw new UnauthorizedException("مجددا وارد حساب کاربری خود شوید");
+    }
+  }
+  verifyPasswordToken(token: string) {
+    try {
+      const verified = this.jwtService.verify(token, {
+        secret: ForgetPassword_JWT_SECRET,
+      });
+      if (verified?.userId && !isNaN(parseInt(verified.userId)))
+        return verified;
+      throw new UnauthorizedException(
+        "لینک مورد نظر منقضی شده مجددا تلاش کنید"
+      );
+    } catch (err) {
+      throw new UnauthorizedException(
+        "لینک مورد نظر منقضی شده مجددا تلاش کنید"
+      );
     }
   }
 }

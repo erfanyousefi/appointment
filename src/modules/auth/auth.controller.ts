@@ -3,6 +3,7 @@ import {ApiConsumes} from "@nestjs/swagger";
 import {FormType} from "src/common/enum/formtype.enum";
 import {AuthService} from "./auth.service";
 import {
+  ChangePasswordDto,
   CheckOtpDto,
   ForgetPasswordDto,
   LoginDto,
@@ -14,6 +15,11 @@ import {
 @Controller("/auth")
 export class AuthController {
   constructor(private authService: AuthService) {}
+  @Post("changeme")
+  @ApiConsumes(FormType.Urlencoded, FormType.Json)
+  changePassword(@Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(dto);
+  }
   @Post("signup")
   @ApiConsumes(FormType.Urlencoded, FormType.Json)
   signup(@Body() dto: SignupDto) {
@@ -36,7 +42,9 @@ export class AuthController {
   }
   @Post("forget-password")
   @ApiConsumes(FormType.Urlencoded, FormType.Json)
-  forgetPassword(@Body() dto: ForgetPasswordDto) {}
+  forgetPassword(@Body() dto: ForgetPasswordDto) {
+    return this.authService.forgetPassword(dto);
+  }
   @Post("refreshtoken")
   @ApiConsumes(FormType.Urlencoded, FormType.Json)
   refreshToken(@Body() dto: RefreshTokenDto) {
