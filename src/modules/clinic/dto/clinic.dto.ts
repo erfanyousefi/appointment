@@ -1,21 +1,30 @@
 import {ApiProperty, ApiPropertyOptional} from "@nestjs/swagger";
-import {IsEnum, IsMobilePhone, IsPhoneNumber} from "class-validator";
+import {
+  IsEnum,
+  IsMobilePhone,
+  IsNotEmpty,
+  IsPhoneNumber,
+} from "class-validator";
 import {LocationType} from "../enum/type.enum";
 
 export class CreateClinicDto {
   @ApiProperty()
   name: string;
   @ApiProperty()
-  categoryId: string;
+  categoryId: number;
   @ApiProperty()
   manager_name: string;
   @ApiProperty()
   @IsMobilePhone("fa-IR", {}, {message: "شماره موبایل وارد شده صحیح نمیباشد"})
   manager_mobile: string;
   @ApiProperty()
-  province: string;
+  // @IsNumber()
+  @IsNotEmpty({message: "استان نمیتواند خالی  ارسال شود"})
+  province: number;
   @ApiProperty()
-  city: string;
+  // @IsNumber()
+  @IsNotEmpty({message: "شهر نمیتواند خالی  ارسال شود"})
+  city: number;
   @ApiProperty()
   address: string;
   @ApiProperty()

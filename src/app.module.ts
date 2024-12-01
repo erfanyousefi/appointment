@@ -3,6 +3,7 @@ import {TypeOrmModule} from "@nestjs/typeorm";
 import {AuthModule} from "./modules/auth/auth.module";
 import {CategoryModule} from "./modules/category/category.module";
 import {ClinicModule} from "./modules/clinic/clinic.module";
+import {S3Service} from "./modules/s3/s3.service";
 import {UserModule} from "./modules/user/user.module";
 
 @Module({
@@ -23,6 +24,6 @@ import {UserModule} from "./modules/user/user.module";
     ClinicModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [S3Service],
 })
 export class AppModule {}
