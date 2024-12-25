@@ -1,12 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  Scope,
 } from "@nestjs/common";
+import {REQUEST} from "@nestjs/core";
 import {InjectRepository} from "@nestjs/typeorm";
 import {isDate, isEnum, isMobilePhone, isPhoneNumber} from "class-validator";
+import {Request} from "express";
 import slugify from "slugify";
+import {WeekDayNames} from "src/common/constant/week";
 import {PaginationDto} from "src/common/dto/pagination.dto";
 import {getCityAndProvinceNameByCode} from "src/common/util/city.util";
 import {
@@ -22,15 +28,17 @@ import {
 } from "typeorm";
 import {CategoryService} from "../category/category.service";
 import {S3Service} from "../s3/s3.service";
-import {CreateClinicDto} from "./dto/clinic.dto";
+import {CreateClinicDto, CreateDoctorDto} from "./dto/clinic.dto";
 import {ClinicFilterDto} from "./dto/filter.dto";
+import {ScheduleDto} from "./dto/schedule.dto";
 import {ClinicEntity} from "./entity/clinic.entity";
 import {ClinicDetailEntity} from "./entity/detail.entity";
 import {ClinicDoctorEntity} from "./entity/doctors.entity";
 import {ClinicDocumentEntity} from "./entity/document.entity";
+import {DoctorScheduleEntity} from "./entity/schedula.entity";
 import {ClinicStatus} from "./enum/status.enum";
 
-@Injectable()
+@Injectable({scope: Scope.REQUEST})
 export class ClinicService {
   constructor(
     @InjectRepository(ClinicDetailEntity)
@@ -41,8 +49,11 @@ export class ClinicService {
     private docsRepository: Repository<ClinicDocumentEntity>,
     @InjectRepository(ClinicDoctorEntity)
     private doctorsRepository: Repository<ClinicDoctorEntity>,
+    @InjectRepository(DoctorScheduleEntity)
+    private scheduleRepository: Repository<DoctorScheduleEntity>,
     private categoryService: CategoryService,
-    private s3Service: S3Service
+    private s3Service: S3Service,
+    @Inject(REQUEST) private request: Request
   ) {}
   async register(dto: CreateClinicDto, files: Express.Multer.File[]) {
     const {
@@ -172,6 +183,16 @@ export class ClinicService {
       clinics,
     };
   }
+  async findOneById(id: number) {
+    const clinic = await this.clinicRepository.findOneBy({id});
+    if (!clinic) throw new NotFoundException("حساب کلینیک یافت نشد");
+    if (clinic.status !== ClinicStatus.Confirmed) {
+      throw new ForbiddenException(
+        "حساب کاربری شما تایید نشده یا رد شده است لطفا با پشتیبانی در تماس باشید"
+      );
+    }
+    return clinic;
+  }
   async checkExistById(id: number) {
     const clinic = await this.clinicRepository.findOneBy({id});
     if (!clinic) throw new NotFoundException("کلنیک وجود ندارد");
@@ -205,5 +226,58 @@ export class ClinicService {
     return {
       message: "رد کلنیک با موفقیت انجام شد",
     };
+  }
+  async createDoctor(doctorDto: CreateDoctorDto, image: Express.Multer.File) {
+    const {degree, experience, firstname, lastname, majors, medical_code} =
+      doctorDto;
+    const {id} = this.request.clinic;
+    const doctor = await this.doctorsRepository.findOneBy({medical_code});
+    if (doctor) throw new ConflictException("کد نظام پزشکی تکراری میباشد");
+    const newDoctor = this.doctorsRepository.create({
+      degree,
+      experience,
+      firstname,
+      lastname,
+      majors,
+      medical_code,
+      clinicId: id,
+    });
+    if (image) {
+      const {Location} = await this.s3Service.uploadFile(
+        image,
+        "clinic/doctor"
+      );
+      newDoctor.image = Location;
+    }
+    await this.doctorsRepository.save(newDoctor);
+    return {
+      message: "دکتر با موفقیت ایجاد شد",
+    };
+  }
+  async addSchedule(scheduleDto: ScheduleDto) {
+    const {day, doctorId, end_time, start_time, status} = scheduleDto;
+    const doctor = await this.doctorsRepository.findOneBy({id: doctorId});
+    if (!doctor) throw new NotFoundException("دکتر وارد شده وجود ندارد");
+    const dayItem = await this.scheduleRepository.findOneBy({doctorId, day});
+    if (dayItem) {
+      throw new ConflictException(
+        "روز وارد شده قبلا ثبت شده است اگر نیازی به تغییر دارید در بخش به روزرسانی اعمال کنید"
+      );
+    }
+    await this.scheduleRepository.insert({
+      doctorId,
+      day,
+      start_time,
+      end_time,
+      status,
+    });
+    return {
+      message: `برنامه روز ${WeekDayNames[day]} با موفقیت ثبت شد`,
+    };
+  }
+  async getSchedule(doctorId: number) {
+    return this.scheduleRepository.find({
+      where: {doctorId},
+    });
   }
 }

@@ -15,7 +15,7 @@ export class ClinicDoctorEntity {
   degree: string;
   @Column()
   majors: string;
-  @Column()
+  @Column({nullable: true})
   image: string;
   @Column()
   experience: string;

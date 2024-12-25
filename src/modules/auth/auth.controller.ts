@@ -30,6 +30,16 @@ export class AuthController {
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
+  @Post("/clinic/send-otp")
+  @ApiConsumes(FormType.Urlencoded, FormType.Json)
+  clinicLogin(@Body() dto: SendOtpDto) {
+    return this.authService.clinicLoginOtp(dto);
+  }
+  @Post("/clinic/check-otp")
+  @ApiConsumes(FormType.Urlencoded, FormType.Json)
+  clinicCheckOtp(@Body() dto: CheckOtpDto) {
+    return this.authService.clinicCheckOtp(dto);
+  }
   @Post("send-otp")
   @ApiConsumes(FormType.Urlencoded, FormType.Json)
   sendOtp(@Body() dto: SendOtpDto) {

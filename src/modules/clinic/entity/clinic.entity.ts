@@ -41,6 +41,10 @@ export class ClinicEntity {
   accepted_at: Date;
   @Column({nullable: true})
   rejected_at: Date;
+  @Column({nullable: true})
+  otp_code: string;
+  @Column({nullable: true})
+  otp_expires_in: Date;
   @Column({type: "enum", enum: LocationType})
   location_type: string;
   @ManyToOne(() => CategoryEntity, (category) => category.clinics, {

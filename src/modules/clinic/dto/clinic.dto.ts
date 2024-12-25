@@ -4,6 +4,7 @@ import {
   IsMobilePhone,
   IsNotEmpty,
   IsPhoneNumber,
+  Matches,
 } from "class-validator";
 import {LocationType} from "../enum/type.enum";
 
@@ -45,4 +46,23 @@ export class CreateClinicDto {
   clinic_image_1: string;
   @ApiPropertyOptional({format: "binary"})
   clinic_image_2: string;
+}
+export class CreateDoctorDto {
+  @ApiProperty()
+  firstname: string;
+  @ApiProperty()
+  lastname: string;
+  @ApiProperty()
+  @Matches(/^[0-9]{4,7}$/, {
+    message: "فرمت وارد شده کد نظام پزشکی اشتباه میباشد",
+  })
+  medical_code: string;
+  @ApiProperty()
+  degree: string;
+  @ApiProperty()
+  majors: string;
+  @ApiPropertyOptional({format: "binary"})
+  image?: string;
+  @ApiProperty()
+  experience: string;
 }

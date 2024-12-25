@@ -7,20 +7,23 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from "@nestjs/common";
-import {AnyFilesInterceptor} from "@nestjs/platform-express";
+import {AnyFilesInterceptor, FileInterceptor} from "@nestjs/platform-express";
 import {ApiConsumes, ApiTags} from "@nestjs/swagger";
 import {memoryStorage} from "multer";
 import {Pagination} from "src/common/decorators/pagination.decorator";
 import {PaginationDto} from "src/common/dto/pagination.dto";
 import {FormType} from "src/common/enum/formtype.enum";
 import {ClinicService} from "./clinic.service";
+import {ClinicAuth} from "./decorators/clinic.decorator";
 import {ClinicFilter} from "./decorators/filter.decorator";
-import {CreateClinicDto} from "./dto/clinic.dto";
+import {CreateClinicDto, CreateDoctorDto} from "./dto/clinic.dto";
 import {ClinicFilterDto} from "./dto/filter.dto";
 import {RejectDto} from "./dto/reject.dto";
+import {ScheduleDto} from "./dto/schedule.dto";
 
 @Controller("clinic")
 @ApiTags("Clinic")
@@ -55,5 +58,30 @@ export class ClinicController {
     @Body() {reason}: RejectDto
   ) {
     return this.clinicService.reject(id, reason);
+  }
+  @Post("/create-doctor")
+  @ClinicAuth()
+  @ApiConsumes(FormType.Multipart)
+  @UseInterceptors(
+    FileInterceptor("image", {
+      storage: memoryStorage(),
+    })
+  )
+  createDoctor(
+    @Body() doctorDto: CreateDoctorDto,
+    @UploadedFile() image: Express.Multer.File
+  ) {
+    return this.clinicService.createDoctor(doctorDto, image);
+  }
+  @Post("/add-doctor-schedule")
+  @ClinicAuth()
+  @ApiConsumes(FormType.Json, FormType.Urlencoded)
+  addSchedule(@Body() scheduleDto: ScheduleDto) {
+    return this.clinicService.addSchedule(scheduleDto);
+  }
+  @Get("/get-doctor-schedule/:doctorId")
+  @ClinicAuth()
+  getSchedule(@Param("doctorId", ParseIntPipe) doctorId: number) {
+    return this.clinicService.getSchedule(doctorId);
   }
 }

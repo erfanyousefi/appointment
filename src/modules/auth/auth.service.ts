@@ -12,12 +12,15 @@ import {isMobilePhone} from "class-validator";
 import {randomInt} from "crypto";
 import {
   A_JWT_SECRET,
+  A_JWT_SECRET_CLINIC,
   ForgetPassword_JWT_SECRET,
   R_JWT_SECRET,
+  R_JWT_SECRET_CLINIC,
 } from "src/common/constant/jwt.const";
 import {mobileValidation} from "src/common/util/mobile.util";
 import {hashPassword, randomPassword} from "src/common/util/password.util";
 import {Repository} from "typeorm";
+import {ClinicEntity} from "../clinic/entity/clinic.entity";
 import {UserEntity} from "../user/entity/user.entity";
 import {
   ChangePasswordDto,
@@ -34,6 +37,8 @@ export class AuthService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(ClinicEntity)
+    private clinicRepository: Repository<ClinicEntity>,
     private jwtService: JwtService
   ) {}
 
@@ -122,6 +127,39 @@ export class AuthService {
     }
     throw new UnauthorizedException("کد ارسال شده صحیح نمییاشد");
   }
+  async clinicLoginOtp(sendOtpDto: SendOtpDto) {
+    const {mobile} = sendOtpDto;
+    const {phoneNumber} = mobileValidation(mobile);
+    let clinic = await this.clinicRepository.findOneBy({
+      manager_mobile: phoneNumber,
+    });
+    if (!clinic) throw new NotFoundException("حساب کاربری یافت نشد");
+    if (clinic.otp_expires_in >= new Date()) {
+      throw new BadRequestException("کد قبلی هنوز منقضی نشده است");
+    }
+    const otpCode = randomInt(10000, 99999);
+    clinic.otp_code = String(otpCode);
+    clinic.otp_expires_in = new Date(new Date().getTime() + 1000 * 60);
+    await this.clinicRepository.save(clinic);
+    return {
+      message: "رمز یکبار مصرف برای شما ارسال شد",
+      code: otpCode,
+    };
+  }
+  async clinicCheckOtp(checkOtpDto: CheckOtpDto) {
+    const {mobile, code} = checkOtpDto;
+    const {phoneNumber} = mobileValidation(mobile);
+    let clinic = await this.clinicRepository.findOneBy({
+      manager_mobile: phoneNumber,
+    });
+    if (!clinic) throw new NotFoundException("حساب کاربری یافت نشد");
+    if (clinic.otp_expires_in < new Date())
+      throw new UnauthorizedException("کد ارسال شده منقضی شده است");
+    if (code === clinic.otp_code) {
+      return this.tokenGenerator(clinic.id, true);
+    }
+    throw new UnauthorizedException("کد ارسال شده صحیح نمییاشد");
+  }
   async refreshToken(refreshTokenDto: RefreshTokenDto) {
     const {refreshToken} = refreshTokenDto;
     const userId = this.verifyRefreshToken(refreshToken);
@@ -143,15 +181,24 @@ export class AuthService {
       link,
     };
   }
-  async tokenGenerator(userId: number) {
-    const accessToken = this.jwtService.sign(
-      {userId},
-      {secret: A_JWT_SECRET, expiresIn: "1d"}
-    );
-    const refreshToken = this.jwtService.sign(
-      {userId},
-      {secret: R_JWT_SECRET, expiresIn: "30d"}
-    );
+  async tokenGenerator(id: number, isClinic: boolean = false) {
+    let AccessTokenSecret = A_JWT_SECRET;
+    let RefreshTokenSecret = R_JWT_SECRET;
+    let params = {userId: id};
+    if (isClinic) {
+      //@ts-ignore
+      params = {clinicId: id};
+      AccessTokenSecret = A_JWT_SECRET_CLINIC;
+      RefreshTokenSecret = R_JWT_SECRET_CLINIC;
+    }
+    const accessToken = this.jwtService.sign(params, {
+      secret: AccessTokenSecret,
+      expiresIn: "1d",
+    });
+    const refreshToken = this.jwtService.sign(params, {
+      secret: RefreshTokenSecret,
+      expiresIn: "30d",
+    });
     return {
       accessToken,
       refreshToken,
@@ -172,6 +219,30 @@ export class AuthService {
       });
       if (verified?.userId && !isNaN(parseInt(verified.userId)))
         return verified?.userId;
+      throw new UnauthorizedException("وارد حساب کاربری خود شوید");
+    } catch (err) {
+      throw new UnauthorizedException("مجددا وارد حساب کاربری خود شوید");
+    }
+  }
+  verifyAccessToken(token: string) {
+    try {
+      const verified = this.jwtService.verify(token, {
+        secret: A_JWT_SECRET,
+      });
+      if (verified?.userId && !isNaN(parseInt(verified.userId)))
+        return verified?.userId;
+      throw new UnauthorizedException("وارد حساب کاربری خود شوید");
+    } catch (err) {
+      throw new UnauthorizedException("مجددا وارد حساب کاربری خود شوید");
+    }
+  }
+  verifyClinicAccessToken(token: string) {
+    try {
+      const verified = this.jwtService.verify(token, {
+        secret: A_JWT_SECRET_CLINIC,
+      });
+      if (verified?.clinicId && !isNaN(parseInt(verified.clinicId)))
+        return verified?.clinicId;
       throw new UnauthorizedException("وارد حساب کاربری خود شوید");
     } catch (err) {
       throw new UnauthorizedException("مجددا وارد حساب کاربری خود شوید");
